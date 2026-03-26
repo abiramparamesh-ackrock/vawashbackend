@@ -101,5 +101,52 @@ else if (req.url === "/earnings" && req.method === "GET") {
     res.end("Not found");
   }
 });
+let users = [];
+else if (req.url === "/signup" && req.method === "POST") {
+  let body = "";
+
+  req.on("data", chunk => body += chunk);
+
+  req.on("end", () => {
+    const data = JSON.parse(body);
+
+    const existingUser = users.find(u => u.phone === data.phone);
+
+    if (existingUser) {
+      res.writeHead(400);
+      return res.end("User already exists");
+    }
+
+    const user = {
+      id: Date.now(),
+      name: data.name,
+      phone: data.phone,
+    };
+
+    users.push(user);
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(user));
+  });
+}
+else if (req.url === "/login" && req.method === "POST") {
+  let body = "";
+
+  req.on("data", chunk => body += chunk);
+
+  req.on("end", () => {
+    const data = JSON.parse(body);
+
+    const user = users.find(u => u.phone === data.phone);
+
+    if (!user) {
+      res.writeHead(404);
+      return res.end("User not found");
+    }
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(user));
+  });
+}
 
 server.listen(5000, () => console.log("Server running"));
