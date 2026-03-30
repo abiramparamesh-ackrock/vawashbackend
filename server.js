@@ -1,9 +1,8 @@
 const http = require("http");
 
-let rides = []; // shared between both apps
-
+let rides = [];
+let users = [];
 let partnerLocation = { lat: null, lng: null };
-
 
 const server = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -15,27 +14,84 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
 
-  // 📌 Customer creates ride
-  if (req.url === "/create-ride" && req.method === "POST") {
+  // 📌 SIGNUP
+  if (req.url === "/signup" && req.method === "POST") {
     let body = "";
+
     req.on("data", chunk => body += chunk);
 
     req.on("end", () => {
       const data = JSON.parse(body);
-      rides.push({ id: Date.now(), ...data, status: "pending" });
+
+      const existing = users.find(u => u.phone === data.phone);
+
+      if (existing) {
+        res.writeHead(400);
+        return res.end("User already exists");
+      }
+
+      const user = {
+        id: Date.now(),
+        name: data.name,
+        phone: data.phone,
+      };
+
+      users.push(user);
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(user));
+    });
+  }
+
+  // 📌 LOGIN
+  else if (req.url === "/login" && req.method === "POST") {
+    let body = "";
+
+    req.on("data", chunk => body += chunk);
+
+    req.on("end", () => {
+      const data = JSON.parse(body);
+
+      const user = users.find(u => u.phone === data.phone);
+
+      if (!user) {
+        res.writeHead(404);
+        return res.end("User not found");
+      }
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(user));
+    });
+  }
+
+  // 📌 CREATE RIDE
+  else if (req.url === "/create-ride" && req.method === "POST") {
+    let body = "";
+
+    req.on("data", chunk => body += chunk);
+
+    req.on("end", () => {
+      const data = JSON.parse(body);
+
+      rides.push({
+        id: Date.now(),
+        ...data,
+        status: "pending",
+        price: data.price || 100
+      });
 
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ message: "Ride created" }));
     });
   }
 
-  // 📌 Partner gets rides
+  // 📌 GET RIDES (Partner)
   else if (req.url === "/rides" && req.method === "GET") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(rides));
   }
 
-  // 📌 Partner accepts ride
+  // 📌 ACCEPT RIDE
   else if (req.url.startsWith("/accept/") && req.method === "POST") {
     const id = req.url.split("/")[2];
 
@@ -46,107 +102,65 @@ const server = http.createServer((req, res) => {
     res.writeHead(200);
     res.end("Accepted");
   }
-// 📌 Get completed rides (History)
+
+  // 📌 COMPLETE RIDE
+  else if (req.url.startsWith("/complete/") && req.method === "POST") {
+    const id = req.url.split("/")[2];
+
+    rides = rides.map(r =>
+      r.id == id ? { ...r, status: "completed" } : r
+    );
+
+    res.writeHead(200);
+    res.end("Completed");
+  }
+
+  // 📌 HISTORY
   else if (req.url === "/history" && req.method === "GET") {
-  const completed = rides.filter(r => r.status === "completed");
-
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(completed));
-}
-
-// 📌 Partner sends live location
-  else if (req.url === "/partner-location" && req.method === "POST") {
-  let body = "";
-  req.on("data", chunk => body += chunk);
-
-  req.on("end", () => {
-    partnerLocation = JSON.parse(body);
+    const completed = rides.filter(r => r.status === "completed");
 
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ message: "Location updated" }));
-  });
-}
+    res.end(JSON.stringify(completed));
+  }
 
-// 📌 Customer gets partner location
+  // 📌 PARTNER LOCATION UPDATE
+  else if (req.url === "/partner-location" && req.method === "POST") {
+    let body = "";
+
+    req.on("data", chunk => body += chunk);
+
+    req.on("end", () => {
+      partnerLocation = JSON.parse(body);
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ message: "Location updated" }));
+    });
+  }
+
+  // 📌 GET LOCATION
   else if (req.url === "/partner-location" && req.method === "GET") {
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(partnerLocation));
-} 
-  // 📌 Partner marks ride completed
-else if (req.url.startsWith("/complete/") && req.method === "POST") {
-  const id = req.url.split("/")[2];
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(partnerLocation));
+  }
 
-  rides = rides.map(r =>
-    r.id == id ? { ...r, status: "completed" } : r
-  );
+  // 📌 EARNINGS
+  else if (req.url === "/earnings" && req.method === "GET") {
+    const completed = rides.filter(r => r.status === "completed");
 
-  res.writeHead(200);
-  res.end("Completed");
-}
-  // 📌 Get partner earnings (only completed rides)
-else if (req.url === "/earnings" && req.method === "GET") {
-  const completed = rides.filter(r => r.status === "completed");
+    const total = completed.reduce((sum, r) => sum + r.price, 0);
 
-  const total = completed.reduce((sum, r) => sum + r.price, 0);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      total,
+      jobs: completed.length,
+      rides: completed
+    }));
+  }
 
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({
-    total,
-    jobs: completed.length,
-    rides: completed
-  }));
-}
   else {
     res.writeHead(404);
     res.end("Not found");
   }
 });
-let users = [];
-else if (req.url === "/signup" && req.method === "POST") {
-  let body = "";
 
-  req.on("data", chunk => body += chunk);
-
-  req.on("end", () => {
-    const data = JSON.parse(body);
-
-    const existingUser = users.find(u => u.phone === data.phone);
-
-    if (existingUser) {
-      res.writeHead(400);
-      return res.end("User already exists");
-    }
-
-    const user = {
-      id: Date.now(),
-      name: data.name,
-      phone: data.phone,
-    };
-
-    users.push(user);
-
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(user));
-  });
-}
-else if (req.url === "/login" && req.method === "POST") {
-  let body = "";
-
-  req.on("data", chunk => body += chunk);
-
-  req.on("end", () => {
-    const data = JSON.parse(body);
-
-    const user = users.find(u => u.phone === data.phone);
-
-    if (!user) {
-      res.writeHead(404);
-      return res.end("User not found");
-    }
-
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(user));
-  });
-}
-
-server.listen(5000, () => console.log("Server running"));
+server.listen(5000, () => console.log("Server running on port 5000"));
