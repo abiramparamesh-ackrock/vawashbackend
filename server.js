@@ -73,12 +73,18 @@ const server = http.createServer((req, res) => {
     req.on("end", () => {
       const data = JSON.parse(body);
 
-      rides.push({
-        id: Date.now(),
-        ...data,
-        status: "pending",
-        price: data.price || 100
-      });
+ console.log("Incoming ride:", data); // ✅ DEBUG
+
+rides.push({
+  id: Date.now(),
+  packageName: data.packageName,
+  price: data.price || 100,
+  location: data.location,
+  lat: data.lat,
+  lng: data.lng,
+  phone: data.phone || "NO PHONE", // ✅ FIX
+  status: "pending"
+});
 
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ message: "Ride created" }));
