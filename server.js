@@ -65,6 +65,10 @@ const server = http.createServer((req, res) => {
   }
 
   // 📌 CREATE RIDE
+if (!data.phone) {
+  res.writeHead(400);
+  return res.end("Contact number required");
+}
   else if (req.url === "/create-ride" && req.method === "POST") {
     let body = "";
 
